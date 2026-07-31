@@ -1,0 +1,38 @@
+name: KPIダッシュボード書き出し（保険用の全体同期）
+
+on:
+  schedule:
+    # JST 23:30（UTC 14:30）
+    - cron: "30 14 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: KPIをdocs/kpi_data.jsonへ書き出し
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+        run: python src/export_kpi.py
+
+      - name: コミット&プッシュ
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/kpi_data.json
+          git diff --cached --quiet || git commit -m "chore: update kpi_data (export-kpi)"
+          git push

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Threads運用ダッシュボード</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #6b7280;
+    --card: #f5f5f7; --border: #e5e7eb; --accent: #2563eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1115; --fg: #e5e7eb; --muted: #9aa1ac; --card: #1a1d24; --border: #2a2e37; --accent: #60a5fa; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: var(--bg); color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Hiragino Sans, sans-serif;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  .updated { color: var(--muted); font-size: 0.85rem; margin-bottom: 20px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .stat .label { color: var(--muted); font-size: 0.8rem; }
+  .stat .value { font-size: 1.5rem; font-weight: 600; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--card); }
+  td.content { white-space: normal; max-width: 420px; }
+  .empty { color: var(--muted); padding: 40px; text-align: center; }
+</style>
+</head>
+<body>
+<h1>Threads運用ダッシュボード</h1>
+<div class="updated" id="updated">読み込み中...</div>
+
+<div class="stats" id="stats"></div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>日付</th><th>本文</th><th>インプレ</th><th>いいね</th><th>コメント</th><th>リポスト</th><th>シェア</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+</div>
+<div class="empty" id="empty" style="display:none">まだ投稿データがありません。post-scheduled / export-kpi ワークフローが動くとここに表示されます。</div>
+
+<script>
+async function load() {
+  const res = await fetch('./kpi_data.json', { cache: 'no-store' });
+  const data = await res.json();
+
+  document.getElementById('updated').textContent = data.generated_at
+    ? `最終更新: ${data.generated_at}`
+    : 'まだデータがありません';
+
+  const posts = (data.posts || []).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+  const totalImp = posts.reduce((s, p) => s + (p.imp || 0), 0);
+  const totalLikes = posts.reduce((s, p) => s + (p.likes || 0), 0);
+  const followers = data.followers || [];
+  const latestFollowers = followers.length ? followers[followers.length - 1].count : '-';
+
+  const stats = [
+    { label: '投稿数', value: posts.length },
+    { label: '累計インプレッション', value: totalImp.toLocaleString() },
+    { label: '累計いいね', value: totalLikes.toLocaleString() },
+    { label: 'フォロワー数', value: latestFollowers },
+  ];
+  document.getElementById('stats').innerHTML = stats.map(s =>
+    `<div class="stat"><div class="label">${s.label}</div><div class="value">${s.value}</div></div>`
+  ).join('');
+
+  const rows = document.getElementById('rows');
+  if (!posts.length) {
+    document.getElementById('empty').style.display = 'block';
+    return;
+  }
+  rows.innerHTML = posts.map(p => `
+    <tr>
+      <td>${p.date || ''}</td>
+      <td class="content">${(p.content || '').replace(/</g, '&lt;')}</td>
+      <td>${p.imp ?? '-'}</td>
+      <td>${p.likes ?? '-'}</td>
+      <td>${p.comments ?? '-'}</td>
+      <td>${p.reposts ?? '-'}</td>
+      <td>${p.shares ?? '-'}</td>
+    </tr>
+  `).join('');
+}
+load().catch(e => {
+  document.getElementById('updated').textContent = '読み込み失敗: ' + e;
+});
+</script>
+</body>
+</html>
